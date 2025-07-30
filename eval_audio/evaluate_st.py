@@ -11,33 +11,55 @@ import requests
 from tqdm import tqdm
 from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration
 from transformers.pipelines.audio_utils import ffmpeg_read
+from itertools import islice
 
 
 ds_collections = {
-    'covost2': {'path': 'st/covost2_eval.jsonl'}
+    'long_translation': {'path': "../datasets/LongSpeechQA/translationQA.jsonl"}
 }
 
+def json_from_this_to_that(source):
+    ans = random.sample(lang_instr[source['target_lang']], 1)
+
+    return {
+        "language": source['target_lang'],
+        "task": "translation",
+        "messages":[
+            {
+                "role": "user",
+                "audio": source['wav_path'],
+                "content": ans
+            },
+            {
+                "role": "assistant",
+                "content": source['content']
+            }
+        ]
+
+    }
 
 class AudioDataset(torch.utils.data.Dataset):
 
-    def __init__(self, ds):
+    def __init__(self, ds, amount= 1000):
         path = ds['path']
-        self.datas = open(path).readlines()
+
+        with open(path) as file:
+            self.datas = list(islice(file, amount))
 
     def __len__(self):
         return len(self.datas)
 
     def __getitem__(self, idx):
         data = json.loads(self.datas[idx].strip())
-        audio = data['audio']
-        source = data['source']
-        prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>"+data['prompt']
-        gt = data['gt']
+        audio = data['messages'][0]['audio']
+        target_lang = data['language']
+        prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>"+ data['messages'][0]['content']
+        gt = data['messages'][1]['content']
 
         return {
             'audio': audio,
             'prompt': prompt,
-            'source': source,
+            'target_lang': target_lang,
             'gt': gt
         }
 
@@ -92,7 +114,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--checkpoint', type=str, default='Qwen/Qwen2-Audio-7B')
-    parser.add_argument('--dataset', type=str, default='')
+    parser.add_argument('--dataset', type=str, default='long_translation')
     parser.add_argument('--batch-size', type=int, default=1)
     parser.add_argument('--num-workers', type=int, default=1)
     parser.add_argument('--seed', type=int, default=0)
@@ -168,7 +190,7 @@ if __name__ == '__main__':
             results.append({
                 'gt': gt,
                 'response': response,
-                'source': source,
+                'target_lang': source,
                 'audio_path': audio_path,
             })
         time_prefix = time.strftime('%y%m%d%H%M%S', time.localtime())
@@ -179,10 +201,10 @@ if __name__ == '__main__':
             source = item["source"]
             results_dict.setdefault(source, []).append(item)
         for source in results_dict:
-            text_lan = source.split("_")[-2]
+            text_lan = source
             if text_lan == "ja":
                 text_lan = "ja-mecab"
-            elif text_lan == "zh":
+            elif text_lan == "zh-CN":
                 text_lan = "zh"
             else:
                 text_lan = "13a"
