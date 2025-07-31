@@ -13,10 +13,10 @@ from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration
 from transformers.pipelines.audio_utils import ffmpeg_read
 from itertools import islice
 
-
 ds_collections = {
-    'long_translation': {'path': "../datasets/LongSpeechQA/translationQA.jsonl"}
+    'long_translation': {'path': "/mnt/workspace/renyi/datasets/LongSpeechQA/translationQA.jsonl"}
 }
+
 
 def json_from_this_to_that(source):
     ans = random.sample(lang_instr[source['target_lang']], 1)
@@ -24,7 +24,7 @@ def json_from_this_to_that(source):
     return {
         "language": source['target_lang'],
         "task": "translation",
-        "messages":[
+        "messages": [
             {
                 "role": "user",
                 "audio": source['wav_path'],
@@ -38,9 +38,10 @@ def json_from_this_to_that(source):
 
     }
 
+
 class AudioDataset(torch.utils.data.Dataset):
 
-    def __init__(self, ds, amount= 1000):
+    def __init__(self, ds, amount=50):
         path = ds['path']
 
         with open(path) as file:
@@ -53,15 +54,18 @@ class AudioDataset(torch.utils.data.Dataset):
         data = json.loads(self.datas[idx].strip())
         audio = data['messages'][0]['audio']
         target_lang = data['language']
-        prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>"+ data['messages'][0]['content']
+        prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>" + data['messages'][0]['content']
         gt = data['messages'][1]['content']
+        instr = data['messages'][0]['content']
 
         return {
             'audio': audio,
             'prompt': prompt,
-            'target_lang': target_lang,
-            'gt': gt
+            'source': target_lang,
+            'gt': gt,
+            'instr': instr
         }
+
 
 def read_audio(audio_path):
     if audio_path.startswith("http://") or audio_path.startswith("https://"):
@@ -78,9 +82,12 @@ def collate_fn(inputs, processor):
     source = [_['source'] for _ in inputs]
     gt = [_['gt'] for _ in inputs]
     audio_path = [_['audio'] for _ in inputs]
-    input_audios = [ffmpeg_read(read_audio(_['audio']),sampling_rate=processor.feature_extractor.sampling_rate) for _ in inputs]
-    inputs = processor(text=input_texts, audios=input_audios, sampling_rate=processor.feature_extractor.sampling_rate, return_tensors="pt", padding=True)
-    return inputs, audio_path, source, gt
+    instr = [_['instr'] for _ in inputs]
+    input_audios = [ffmpeg_read(read_audio(_['audio']), sampling_rate=processor.feature_extractor.sampling_rate) for _
+                    in inputs]
+    inputs = processor(text=input_texts, audios=input_audios, sampling_rate=processor.feature_extractor.sampling_rate,
+                       return_tensors="pt", padding=True)
+    return inputs, audio_path, source, gt, instr
 
 
 class InferenceSampler(torch.utils.data.sampler.Sampler):
@@ -153,15 +160,17 @@ if __name__ == '__main__':
     sources = []
     rets = []
     audio_paths = []
-    for _, (inputs, audio_path, source, gt) in tqdm(enumerate(data_loader)):
-        inputs['input_ids'] = inputs['input_ids'].to('cuda')
+    instrs = []
+    for _, (inputs, audio_path, source, gt, instr) in tqdm(enumerate(data_loader)):
+        inputs = {k: v.to('cuda') for k, v in inputs.items() if isinstance(v, torch.Tensor)}
         output_ids = model.generate(**inputs, max_new_tokens=256, min_new_tokens=1, do_sample=False)
-        output_ids = output_ids[:, inputs.input_ids.size(1):]
+        output_ids = output_ids[:, inputs['input_ids'].size(1):]
         output = processor.batch_decode(output_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
         gts.extend(gt)
         rets.extend(output)
         sources.extend(source)
         audio_paths.extend(audio_path)
+        instrs.extend(instr)
 
     torch.distributed.barrier()
 
@@ -170,10 +179,12 @@ if __name__ == '__main__':
     merged_sources = [None for _ in range(world_size)]
     merged_responses = [None for _ in range(world_size)]
     merged_audio_paths = [None for _ in range(world_size)]
+    merged_instrs = [None for _ in range(world_size)]
     torch.distributed.all_gather_object(merged_gts, gts)
     torch.distributed.all_gather_object(merged_sources, sources)
     torch.distributed.all_gather_object(merged_responses, rets)
     torch.distributed.all_gather_object(merged_audio_paths, audio_paths)
+    torch.distributed.all_gather_object(merged_instrs, instrs)
 
     merged_gts = [_ for _ in itertools.chain.from_iterable(merged_gts)]
     merged_sources = [_ for _ in itertools.chain.from_iterable(merged_sources)]
@@ -181,17 +192,19 @@ if __name__ == '__main__':
     merged_responses = [
         _ for _ in itertools.chain.from_iterable(merged_responses)
     ]
+    merged_instrs = [_ for _ in itertools.chain.from_iterable(merged_instrs)]
 
     if torch.distributed.get_rank() == 0:
         print(f"Evaluating {args.dataset} ...")
 
         results = []
-        for gt, response, source, audio_path in zip(merged_gts, merged_responses, merged_sources, merged_audio_paths):
+        for gt, response, source, audio_path, instr in zip(merged_gts, merged_responses, merged_sources, merged_audio_paths, merged_instrs):
             results.append({
                 'gt': gt,
                 'response': response,
-                'target_lang': source,
+                'source': source,
                 'audio_path': audio_path,
+                'instr': instr,
             })
         time_prefix = time.strftime('%y%m%d%H%M%S', time.localtime())
         results_file = f'{args.dataset}_{time_prefix}.json'
@@ -215,8 +228,25 @@ if __name__ == '__main__':
                 response = result["response"]
                 refs.append(gt)
                 hyps.append(response)
-            bleu = sacrebleu.corpus_bleu(hyps,[refs], tokenize=text_lan).score
-            print(f"source: {source}  cnt: {len(refs)} bleu score: {bleu:.4f}")
 
+            with open('output.txt', 'a', encoding='utf-8') as file:
+                # 写入 source 信息
+                file.write(f'Source: {source}\n')
+
+                # 遍历 results_list 并写入 gt, hyps, audio link 和 prompt
+                for result in results_list:
+                    gt = result["gt"]
+                    response = result["response"]
+                    audio_link = result.get("audio_path", "N/A")
+                    prompt = result.get("instr", "N/A")
+
+                    file.write(f'GT: {gt}\n')
+                    file.write(f'HYP: {response}\n')
+                    file.write(f'Audio Link: {audio_link}\n')
+                    file.write(f'Prompt: {prompt}\n')
+                    file.write('---\n')  # 分隔符
+
+            bleu = sacrebleu.corpus_bleu(hyps, [refs], tokenize=text_lan).score
+            print(f"source: {source}  cnt: {len(refs)} bleu score: {bleu:.4f}")
 
     torch.distributed.barrier()
