@@ -18,25 +18,25 @@ ds_collections = {
 }
 
 
-def json_from_this_to_that(source):
-    ans = random.sample(lang_instr[source['target_lang']], 1)
-
-    return {
-        "language": source['target_lang'],
-        "task": "translation",
-        "messages": [
-            {
-                "role": "user",
-                "audio": source['wav_path'],
-                "content": ans
-            },
-            {
-                "role": "assistant",
-                "content": source['content']
-            }
-        ]
-
-    }
+lang_name = {
+  "en": "English",
+  "de": "German",
+  "fr": "French",
+  "zh-CN": "Mandarin",
+  "es": "Spanish",
+  "it": "Italian",
+  "pl": "Polish",
+  "ro": "Romanian",
+  "ja": "Japanese",
+  "hu": "Hungarian",
+  "cs": "Czech",
+  "tr": "Turkish",
+  "nl": "Dutch",
+  "th": "Thai",
+  "id": "Indonesian",
+  "vi": "Vietnamese",
+  "ko": "Korean"
+}
 
 
 class AudioDataset(torch.utils.data.Dataset):
@@ -54,9 +54,10 @@ class AudioDataset(torch.utils.data.Dataset):
         data = json.loads(self.datas[idx].strip())
         audio = data['messages'][0]['audio']
         target_lang = data['language']
-        prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>" + data['messages'][0]['content']
+        message = f"Detect the language and translate the speech into {lang_name['target_lang']}: <|en|>"
+        prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>" + message
         gt = data['messages'][1]['content']
-        instr = data['messages'][0]['content']
+        instr = message
 
         return {
             'audio': audio,
