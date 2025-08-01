@@ -54,7 +54,7 @@ class AudioDataset(torch.utils.data.Dataset):
         data = json.loads(self.datas[idx].strip())
         audio = data['messages'][0]['audio']
         target_lang = data['language']
-        message = f"Detect the language and translate the speech into {lang_name['target_lang']}: <|en|>"
+        message = f"Detect the language and translate the speech into {lang_name[target_lang]}: <|en|>"
         prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>" + message
         gt = data['messages'][1]['content']
         instr = message
