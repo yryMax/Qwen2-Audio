@@ -136,10 +136,13 @@ if __name__ == '__main__':
 
     torch.cuda.set_device(int(os.getenv('LOCAL_RANK', 0)))
 
-    model = Qwen2AudioForConditionalGeneration.from_pretrained(
-        args.checkpoint, device_map='cuda', trust_remote_code=True, torch_dtype='auto').eval()
+    cache_dir = "/mnt/workspace/renyi/Qwen2-Audio"
 
-    processor = AutoProcessor.from_pretrained(args.checkpoint)
+    model = Qwen2AudioForConditionalGeneration.from_pretrained(
+        args.checkpoint, device_map='cuda', trust_remote_code=True, torch_dtype='auto',
+        cache_dir=cache_dir).eval()
+
+    processor = AutoProcessor.from_pretrained(args.checkpoint, cache_dir=cache_dir)
 
     processor.tokenizer.padding_side = 'left'
 
@@ -230,7 +233,7 @@ if __name__ == '__main__':
                 refs.append(gt)
                 hyps.append(response)
 
-            with open('output.txt', 'a', encoding='utf-8') as file:
+            with open('output.txt', 'w', encoding='utf-8') as file:
                 # 写入 source 信息
                 file.write(f'Source: {source}\n')
 
