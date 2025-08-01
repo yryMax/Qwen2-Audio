@@ -20,9 +20,9 @@ from typing import Union
 
 import numpy as np
 
-from ...feature_extraction_utils import BatchFeature
-from ...processing_utils import ProcessingKwargs, ProcessorMixin, Unpack
-from ...tokenization_utils_base import PreTokenizedInput, TextInput
+from transformers.feature_extraction_utils import BatchFeature
+from transformers.processing_utils import ProcessingKwargs, ProcessorMixin, Unpack
+from transformers.tokenization_utils_base import PreTokenizedInput, TextInput
 
 
 class Qwen2AudioProcessorKwargs(ProcessingKwargs, total=False):

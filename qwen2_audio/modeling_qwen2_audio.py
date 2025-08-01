@@ -21,14 +21,14 @@ from typing import Callable, Optional, Union
 import torch
 from torch import nn
 
-from ...activations import ACT2FN
-from ...cache_utils import Cache
-from ...generation import GenerationMixin
-from ...modeling_layers import GradientCheckpointingLayer
-from ...modeling_outputs import BaseModelOutput, ModelOutput
-from ...modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
-from ...utils import auto_docstring, logging
-from ..auto import AutoModel, AutoModelForCausalLM
+from transformers.activations import ACT2FN
+from transformers.cache_utils import Cache
+from transformers.generation import GenerationMixin
+from transformers.modeling_layers import GradientCheckpointingLayer
+from transformers.modeling_outputs import BaseModelOutput, ModelOutput
+from transformers.modeling_utils import ALL_ATTENTION_FUNCTIONS, PreTrainedModel
+from transformers.utils import auto_docstring, logging
+from transformers.models.auto import AutoModel, AutoModelForCausalLM
 from .configuration_qwen2_audio import Qwen2AudioConfig, Qwen2AudioEncoderConfig
 
 
