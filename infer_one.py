@@ -13,7 +13,7 @@ if __name__ == '__main__':
     prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>Detect the language and translate the speech into Mandarin: <|en|>"
     url = "/mnt/workspace/renyi/datasets/LongSpeech/wavs/000006.wav"
     audio, sr = librosa.load(url, sr=processor.feature_extractor.sampling_rate)
-    inputs = processor(text=prompt, audios=audio, return_tensors="pt")
+    inputs = processor(text=prompt, audio=audio, return_tensors="pt")
 
     generated_ids = model.generate(**inputs, max_length=256)
     generated_ids = generated_ids[:, inputs.input_ids.size(1):]
