@@ -233,7 +233,7 @@ if __name__ == '__main__':
                 refs.append(gt)
                 hyps.append(response)
 
-            with open('output.txt', 'w', encoding='utf-8') as file:
+            with open('output.txt', 'a', encoding='utf-8') as file:
                 # 写入 source 信息
                 file.write(f'Source: {source}\n')
 
