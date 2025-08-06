@@ -23,7 +23,7 @@ import numpy as np
 from transformers.feature_extraction_utils import BatchFeature
 from transformers.processing_utils import ProcessingKwargs, ProcessorMixin, Unpack
 from transformers.tokenization_utils_base import PreTokenizedInput, TextInput
-
+import torch
 
 class Qwen2AudioProcessorKwargs(ProcessingKwargs, total=False):
     _defaults = {
@@ -124,8 +124,29 @@ class Qwen2AudioProcessor(ProcessorMixin):
             # Some kwargs should not be changed so we can expand text with audio tokens below
             output_kwargs["audio_kwargs"]["return_attention_mask"] = True
             output_kwargs["audio_kwargs"]["padding"] = "max_length"
-            audio_inputs = self.feature_extractor(audio, **output_kwargs["audio_kwargs"])
 
+            #audio_inputs = self.feature_extractor(audio, **output_kwargs["audio_kwargs"])
+
+            ###########################################################
+            sample_rate = self.feature_extractor.sampling_rate
+            chunk_samples = self.feature_extractor.chunk_length * sample_rate
+            output_kwargs["audio_kwargs"]["return_attention_mask"] = True
+            output_kwargs["audio_kwargs"]["padding"] = "max_length"
+            all_features = []
+            all_masks = []
+
+            for i in range(0, len(audio), chunk_samples):
+                audio_chunk = audio[i:i + chunk_samples]
+                chunk_inputs = self.feature_extractor(audio_chunk, **output_kwargs["audio_kwargs"])
+
+                all_features.append(chunk_inputs["input_features"])
+                all_masks.append(chunk_inputs["attention_mask"])
+
+            audio_inputs = {
+                "input_features": torch.cat(all_features, dim=-1),
+                "attention_mask": torch.cat(all_masks, dim=-1)
+            }
+            ###########################################################
             # rename attention_mask to prevent conflicts later on
             audio_inputs["feature_attention_mask"] = audio_inputs.pop("attention_mask")
 
