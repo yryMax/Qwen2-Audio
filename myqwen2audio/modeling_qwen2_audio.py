@@ -320,6 +320,7 @@ class Qwen2AudioEncoder(Qwen2AudioPreTrainedModel):
         self.conv1 = nn.Conv1d(self.num_mel_bins, embed_dim, kernel_size=3, padding=1)
         self.conv2 = nn.Conv1d(embed_dim, embed_dim, kernel_size=3, stride=2, padding=1)
 
+        self.max_once_positions = 1500
         self.embed_positions = nn.Embedding(self.max_source_positions, embed_dim)
         self.embed_positions.requires_grad_(False)
 
@@ -391,9 +392,14 @@ class Qwen2AudioEncoder(Qwen2AudioPreTrainedModel):
         inputs_embeds = nn.functional.gelu(self.conv2(inputs_embeds))
 
         inputs_embeds = inputs_embeds.permute(0, 2, 1)
-        embed_pos = self.embed_positions.weight
-
-        hidden_states = inputs_embeds + embed_pos
+        #embed_pos = self.embed_positions.weight
+        ###########
+        seq_len = inputs_embeds.shape[1]
+        positions = torch.arange(seq_len, device=inputs_embeds.device) % 1500  # [0,1,2,...,1499,0,1,2,...]
+        position_embeddings = self.embed_positions(positions)
+        hidden_states = inputs_embeds + position_embeddings.unsqueeze(0)
+        ###########
+        # hidden_states = inputs_embeds + embed_pos
         hidden_states = nn.functional.dropout(hidden_states, p=self.dropout, training=self.training)
 
         encoder_states = () if output_hidden_states else None
