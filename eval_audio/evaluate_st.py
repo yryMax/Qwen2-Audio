@@ -12,6 +12,8 @@ from tqdm import tqdm
 from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration
 from transformers.pipelines.audio_utils import ffmpeg_read
 from itertools import islice
+import numpy as np
+from chunk2 import ChunkedAudioGenerator
 
 ds_collections = {
     'long_translation': {'path': "/mnt/workspace/renyi/datasets/LongSpeechQA/translationQA.jsonl"}
@@ -79,16 +81,13 @@ def read_audio(audio_path):
     return inputs
 
 def collate_fn(inputs, processor):
-    input_texts = [_['prompt'] for _ in inputs]
     source = [_['source'] for _ in inputs]
     gt = [_['gt'] for _ in inputs]
     audio_path = [_['audio'] for _ in inputs]
     instr = [_['instr'] for _ in inputs]
     input_audios = [ffmpeg_read(read_audio(_['audio']), sampling_rate=processor.feature_extractor.sampling_rate) for _
                     in inputs]
-    inputs = processor(text=input_texts, audios=input_audios, sampling_rate=processor.feature_extractor.sampling_rate,
-                       return_tensors="pt", padding=True)
-    return inputs, audio_path, source, gt, instr
+    return input_audios, audio_path, source, gt, instr
 
 
 class InferenceSampler(torch.utils.data.sampler.Sampler):
@@ -146,6 +145,8 @@ if __name__ == '__main__':
 
     processor.tokenizer.padding_side = 'left'
 
+    chunk_g = ChunkedAudioGenerator(model, processor)
+
     random.seed(args.seed)
     dataset = AudioDataset(
         ds=ds_collections[args.dataset],
@@ -165,11 +166,8 @@ if __name__ == '__main__':
     rets = []
     audio_paths = []
     instrs = []
-    for _, (inputs, audio_path, source, gt, instr) in tqdm(enumerate(data_loader)):
-        inputs = {k: v.to('cuda') for k, v in inputs.items() if isinstance(v, torch.Tensor)}
-        output_ids = model.generate(**inputs, max_new_tokens=256, min_new_tokens=1, do_sample=False)
-        output_ids = output_ids[:, inputs['input_ids'].size(1):]
-        output = processor.batch_decode(output_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)
+    for _, (audio, audio_path, source, gt, instr) in tqdm(enumerate(data_loader)):
+        output = chunk_g.generate_with_chunked_audio(text_prompt=instr, audio=audio)
         gts.extend(gt)
         rets.extend(output)
         sources.extend(source)
@@ -217,6 +215,8 @@ if __name__ == '__main__':
         for item in tqdm(results):
             source = item["source"]
             results_dict.setdefault(source, []).append(item)
+
+        bleu_all = []
         for source in results_dict:
             text_lan = source
             if text_lan == "ja":
@@ -251,6 +251,7 @@ if __name__ == '__main__':
                     file.write('---\n')  # 分隔符
 
             bleu = sacrebleu.corpus_bleu(hyps, [refs], tokenize=text_lan).score
+            bleu_all.append(bleu)
             print(f"source: {source}  cnt: {len(refs)} bleu score: {bleu:.4f}")
-
+        print(np.mean(bleu_all), np.std(bleu_all), np.max(bleu_all), np.min(bleu_all))
     torch.distributed.barrier()
