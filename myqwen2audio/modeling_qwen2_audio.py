@@ -480,7 +480,7 @@ class Qwen2AudioMultiModalProjector(nn.Module):
 class Qwen2AudioForConditionalGeneration(Qwen2AudioPreTrainedModel, GenerationMixin):
     def __init__(self, config: Qwen2AudioConfig):
         super().__init__(config)
-        self.audio_tower = AutoModel.from_config(config.audio_config)  # Usually a `Qwen2AudioEncoder` instance
+        self.audio_tower = Qwen2AudioEncoder(config.audio_config)  # Usually a `Qwen2AudioEncoder` instance
 
         self.multi_modal_projector = Qwen2AudioMultiModalProjector(config)
         self.vocab_size = config.text_config.vocab_size
