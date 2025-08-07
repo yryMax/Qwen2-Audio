@@ -47,15 +47,15 @@ class ChunkedAudioGenerator:
             max_new_tokens: 每个chunk的最大生成token数
             **generation_kwargs: 其他生成参数
         """
-        print("i mean wtf")
+        #print("i mean wtf")
         audio_chunks = self.chunk_audio(audio)
-        print(f"Audio split into {len(audio_chunks)} chunks")
+        #print(f"Audio split into {len(audio_chunks)} chunks")
 
         chunk_responses = []
         accumulated_context = ""
 
         for i, chunk in enumerate(audio_chunks):
-            print(f"Processing chunk {i + 1}/{len(audio_chunks)}")
+            #print(f"Processing chunk {i + 1}/{len(audio_chunks)}")
 
             """
             TODO: new prompt based on the accumulated context.
