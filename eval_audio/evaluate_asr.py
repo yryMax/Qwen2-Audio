@@ -29,7 +29,6 @@ chinese_normalizer = TextNorm(
 basic_normalizer = BasicTextNormalizer()
 
 from tqdm import tqdm
-
 from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration
 
 PUNCS = '!,.?;:'

@@ -13,7 +13,7 @@ from transformers import AutoProcessor, Qwen2AudioForConditionalGeneration
 from transformers.pipelines.audio_utils import ffmpeg_read
 from itertools import islice
 import numpy as np
-from chunk2 import ChunkedAudioGenerator
+from ..chunk2 import ChunkedAudioGenerator
 
 ds_collections = {
     'long_translation': {'path': "/mnt/workspace/renyi/datasets/LongSpeechQA/translationQA.jsonl"}
@@ -59,14 +59,13 @@ class AudioDataset(torch.utils.data.Dataset):
         message = f"Detect the language and translate the speech into {lang_name[target_lang]}: <|en|>"
         prompt = "<|audio_bos|><|AUDIO|><|audio_eos|>" + message
         gt = data['messages'][1]['content']
-        instr = message
 
         return {
             'audio': audio,
             'prompt': prompt,
             'source': target_lang,
             'gt': gt,
-            'instr': instr
+            'instr': prompt
         }
 
 
