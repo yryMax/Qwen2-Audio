@@ -170,16 +170,12 @@ if __name__ == '__main__':
 
             gts.append(sample['gt'])
             rets.append(output)
-            sources.append(sample['source'])
+            sources.append(sample['language'])
             audio_paths.append(sample['audio'])
 
 
         except Exception as e:
             print(f"\nError processing sample {idx}: {e}")
-            gts.append(sample['gt'])
-            rets.append("")
-            sources.append(sample['source'])
-            audio_paths.append(sample['audio'])
 
 
     results = []
@@ -196,10 +192,6 @@ if __name__ == '__main__':
     with open(results_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, ensure_ascii=False, indent=2)
 
-    results_dict = {}
-    for item in results:
-        source = item["source"]
-        results_dict.setdefault(source, []).append(item)
 
     all_wers = []
     refs = []
